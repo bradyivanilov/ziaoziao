@@ -1,0 +1,291 @@
+name: Build Miaomiao APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Project & Source Code
+        run: |
+          mkdir -p app/src/main/java/com/ziaoziao/tool
+
+          cat << 'EOF' > settings.gradle
+          rootProject.name = "MiaomiaoTool"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.ziaoziao.tool'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.ziaoziao.tool"
+                  minSdk 21
+                  targetSdk 28
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <application
+                  android:allowBackup="true"
+                  android:label="Miaomiao Tool"
+                  android:requestLegacyExternalStorage="true"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/ziaoziao/tool/MainActivity.java
+          package com.ziaoziao.tool;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.widget.Toast;
+          import java.io.File;
+
+          public class MainActivity extends Activity {
+
+              private static final int PERMISSION_CODE = 100;
+              private final String targetDirPath = "/sdcard/Android/data/com.elex.twdsaw.gp/files";
+              private final String targetFileName = "miaomiao";
+              private TextView tvStatus;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  LinearLayout mainLayout = new LinearLayout(this);
+                  mainLayout.setOrientation(LinearLayout.VERTICAL);
+                  mainLayout.setGravity(Gravity.CENTER);
+                  mainLayout.setBackgroundColor(Color.parseColor("#0D0D0D"));
+                  mainLayout.setPadding(60, 60, 60, 60);
+
+                  TextView tvTitle = new TextView(this);
+                  tvTitle.setText("ZIAOZIAO // MIAOMIAO");
+                  tvTitle.setTextSize(24f);
+                  tvTitle.setTextColor(Color.parseColor("#00E676"));
+                  tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
+                  tvTitle.setGravity(Gravity.CENTER);
+                  tvTitle.setPadding(0, 0, 0, 16);
+
+                  TextView tvSub = new TextView(this);
+                  tvSub.setText("Target: com.elex.twdsaw.gp");
+                  tvSub.setTextSize(13f);
+                  tvSub.setTextColor(Color.parseColor("#777777"));
+                  tvSub.setTypeface(Typeface.MONOSPACE);
+                  tvSub.setGravity(Gravity.CENTER);
+                  tvSub.setPadding(0, 0, 0, 70);
+
+                  tvStatus = new TextView(this);
+                  tvStatus.setText("STATUS: MENGECEK...");
+                  tvStatus.setTextSize(15f);
+                  tvStatus.setTextColor(Color.WHITE);
+                  tvStatus.setTypeface(Typeface.MONOSPACE);
+                  tvStatus.setGravity(Gravity.CENTER);
+                  tvStatus.setPadding(40, 45, 40, 45);
+                  tvStatus.setBackground(createRoundedBg("#1A1A1A", "#333333"));
+
+                  View spacer1 = new View(this);
+                  spacer1.setLayoutParams(new LinearLayout.LayoutParams(1, 70));
+
+                  Button btnCreate = new Button(this);
+                  btnCreate.setText("INJECT FILE MIAOMIAO");
+                  btnCreate.setTextSize(14f);
+                  btnCreate.setTextColor(Color.BLACK);
+                  btnCreate.setTypeface(Typeface.DEFAULT_BOLD);
+                  btnCreate.setBackground(createRoundedBg("#00E676", "#00E676"));
+                  btnCreate.setPadding(40, 35, 40, 35);
+                  btnCreate.setOnClickListener(v -> {
+                      if (hasPermission()) executeFileAction(true); else askPermission();
+                  });
+
+                  View spacer2 = new View(this);
+                  spacer2.setLayoutParams(new LinearLayout.LayoutParams(1, 35));
+
+                  Button btnDelete = new Button(this);
+                  btnDelete.setText("HAPUS FILE (RESET)");
+                  btnDelete.setTextSize(14f);
+                  btnDelete.setTextColor(Color.WHITE);
+                  btnDelete.setTypeface(Typeface.DEFAULT_BOLD);
+                  btnDelete.setBackground(createRoundedBg("#FF1744", "#FF1744"));
+                  btnDelete.setPadding(40, 35, 40, 35);
+                  btnDelete.setOnClickListener(v -> {
+                      if (hasPermission()) executeFileAction(false); else askPermission();
+                  });
+
+                  mainLayout.addView(tvTitle);
+                  mainLayout.addView(tvSub);
+                  mainLayout.addView(tvStatus);
+                  mainLayout.addView(spacer1);
+                  mainLayout.addView(btnCreate);
+                  mainLayout.addView(spacer2);
+                  mainLayout.addView(btnDelete);
+
+                  setContentView(mainLayout);
+
+                  if (hasPermission()) {
+                      updateFileStatus();
+                  } else {
+                      askPermission();
+                  }
+              }
+
+              private GradientDrawable createRoundedBg(String fillHex, String strokeHex) {
+                  GradientDrawable gd = new GradientDrawable();
+                  gd.setShape(GradientDrawable.RECTANGLE);
+                  gd.setCornerRadius(24f);
+                  gd.setColor(Color.parseColor(fillHex));
+                  gd.setStroke(3, Color.parseColor(strokeHex));
+                  return gd;
+              }
+
+              private void updateFileStatus() {
+                  File file = new File(targetDirPath, targetFileName);
+                  if (file.exists()) {
+                      tvStatus.setText("STATUS: AKTIF [TERPASANG]");
+                      tvStatus.setTextColor(Color.parseColor("#00E676"));
+                      tvStatus.setBackground(createRoundedBg("#0D2618", "#00E676"));
+                  } else {
+                      tvStatus.setText("STATUS: TIDAK AKTIF [KOSONG]");
+                      tvStatus.setTextColor(Color.parseColor("#FF5252"));
+                      tvStatus.setBackground(createRoundedBg("#260D12", "#FF5252"));
+                  }
+              }
+
+              private void executeFileAction(boolean create) {
+                  try {
+                      File dir = new File(targetDirPath);
+                      if (!dir.exists()) dir.mkdirs();
+
+                      File file = new File(dir, targetFileName);
+                      if (create) {
+                          if (file.exists()) {
+                              Toast.makeText(this, "File miaomiao sudah ada!", Toast.LENGTH_SHORT).show();
+                          } else if (file.createNewFile()) {
+                              Toast.makeText(this, "BERHASIL: miaomiao aktif!", Toast.LENGTH_SHORT).show();
+                          }
+                      } else {
+                          if (file.exists() && file.delete()) {
+                              Toast.makeText(this, "File miaomiao dihapus!", Toast.LENGTH_SHORT).show();
+                          } else {
+                              Toast.makeText(this, "File memang belum ada.", Toast.LENGTH_SHORT).show();
+                          }
+                      }
+                      updateFileStatus();
+                  } catch (Exception e) {
+                      Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                  }
+              }
+
+              private boolean hasPermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+                  }
+                  return true;
+              }
+
+              private void askPermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      requestPermissions(new String[]{
+                          Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                          Manifest.permission.READ_EXTERNAL_STORAGE
+                      }, PERMISSION_CODE);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_CODE && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                      updateFileStatus();
+                  } else {
+                      tvStatus.setText("STATUS: IZIN DITOLAK!");
+                  }
+              }
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miaomiao-Tool-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
